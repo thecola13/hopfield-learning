@@ -71,14 +71,12 @@ class BioLinear(nn.Module):
             torch_dtype = torch.float32
             self._dtype_str = 'float32'
         
-        # Initialize weights: randn / sqrt(in_dim) matches old.py NumPy init
-        # Note: old.py uses np.random.randn(...) / sqrt(in_dim), no row normalization
-        weights = torch.randn(out_features, in_features, dtype=torch_dtype, device=device)
-        
-        # Optional: normalize rows to unit L2 norm (off by default for parity)
+        weights = torch.rand(out_features, in_features, dtype=torch_dtype, device=device)
+
         if normalize_init:
-            weights = weights / weights.norm(dim=1, keepdim=True)
-        
+            lp_norm = (torch.abs(weights) ** p).sum(dim=1, keepdim=True) ** (1.0 / p)
+            weights = weights / lp_norm
+
         self.weight = nn.Parameter(weights, requires_grad=False)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -146,7 +144,7 @@ class BioLinear(nn.Module):
         # Normalize by max absolute change
         nc = torch.max(torch.abs(ds))
         if nc < 1e-30: nc = 1e-30
-        
+
         synapses.add_(lr * (ds / nc))
     
     def get_weight_images(self, img_shape: tuple) -> np.ndarray:
