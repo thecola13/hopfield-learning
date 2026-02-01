@@ -22,14 +22,21 @@ from data_utils import get_mnist_loaders, get_cifar10_loaders
 from visualize import (
     draw_weights, draw_weights_color, plot_learning_curves,
     create_weight_evolution_video, save_weight_evolution_frames,
+    draw_random_feature_detectors, draw_random_feature_detectors_color,
+    plot_error_rates,
 )
 
 
 def create_run_dir(base_dir: str, experiment_name: str) -> Path:
-    """Create a timestamped run directory."""
+    """Create a timestamped run directory with results subdirectory."""
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     run_dir = Path(base_dir) / f"{experiment_name}_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create results subdirectory for weights
+    results_dir = run_dir / "results"
+    results_dir.mkdir(exist_ok=True)
+    
     return run_dir
 
 
@@ -59,6 +66,22 @@ def save_hyperparams(run_dir: Path, hyperparams: dict, results: dict = None):
         json.dump({"hyperparams": hyperparams, "results": results or {}}, f, indent=2)
     
     print(f"Saved hyperparams to: {log_path}")
+
+
+def save_weights(run_dir: Path, weights: torch.Tensor, name: str):
+    """Save weights to the results folder.
+    
+    Args:
+        run_dir: Run directory path
+        weights: Weight tensor to save
+        name: Name for the weight file (e.g., 'bio_phase1', 'backprop_final')
+    """
+    results_dir = run_dir / "results"
+    results_dir.mkdir(exist_ok=True)
+    
+    weight_path = results_dir / f"{name}_weights.pt"
+    torch.save(weights.cpu(), weight_path)
+    print(f"Saved weights to: {weight_path}")
 
 
 def run_mnist_experiment(
@@ -106,10 +129,10 @@ def run_mnist_experiment(
     N = 4.5  # ReLU^n exponent
     
     # Training params
-    PHASE1_EPOCHS = 1000
+    PHASE1_EPOCHS = 10
     PHASE1_LR_START = 0.04
     PHASE1_LR_END = 0.0
-    PHASE2_EPOCHS = 300
+    PHASE2_EPOCHS = 10
     BATCH_SIZE = 100
     
     # Collect hyperparameters for logging
@@ -196,6 +219,9 @@ def run_mnist_experiment(
         )
         print(f"Weight evolution video saved to {video_path}")
     
+    # Save bio weights after Phase 1
+    save_weights(run_dir, bio_net.bio_layer.weight.data, "bio_phase1")
+    
     # Visualize bio weights (should show ghost digits)
     bio_weights = bio_net.bio_layer.weight.data.cpu().numpy()
     draw_weights(
@@ -226,6 +252,10 @@ def run_mnist_experiment(
         device=device,
     )
     
+    # Save bio weights after Phase 2
+    save_weights(run_dir, bio_net.bio_layer.weight.data, "bio_phase2")
+    save_weights(run_dir, bio_net.readout.weight.data, "bio_readout")
+    
     bio_final_error = bio_history["test_error"][-1]
     print(f"\nBio-Inspired Final Test Error: {bio_final_error:.2f}%")
     
@@ -251,6 +281,10 @@ def run_mnist_experiment(
     bp_final_error = bp_history["test_error"][-1]
     print(f"\nBackprop Final Test Error: {bp_final_error:.2f}%")
     
+    # Save backprop weights
+    save_weights(run_dir, bp_net.hidden.weight.data, "backprop_hidden")
+    save_weights(run_dir, bp_net.readout.weight.data, "backprop_readout")
+    
     # Visualize backprop weights (should look like noise)
     bp_weights = bp_net.get_weight_images((28, 28))
     draw_weights(
@@ -269,6 +303,33 @@ def run_mnist_experiment(
         bp_history,
         title="MNIST: Accuracy vs Epoch",
         save_path=str(run_dir / "mnist_learning_curves.png"),
+    )
+    
+    # Plot error rates (paper-style)
+    plot_error_rates(
+        bio_history,
+        bp_history,
+        title="MNIST: Error Rate on Training and Test Sets",
+        save_path=str(run_dir / "mnist_error_rates.png"),
+    )
+    
+    # Draw random feature detectors (paper-style: "Twenty randomly chosen feature detectors")
+    draw_random_feature_detectors(
+        bio_weights,
+        img_shape=(28, 28),
+        n_detectors=20,
+        title="Bio-Inspired: Twenty Randomly Chosen Feature Detectors (of 2,000)",
+        save_path=str(run_dir / "mnist_bio_random_detectors.png"),
+        cmap="RdBu_r",
+    )
+    
+    draw_random_feature_detectors(
+        bp_weights,
+        img_shape=(28, 28),
+        n_detectors=20,
+        title="Backprop: Twenty Randomly Chosen Feature Detectors (of 2,000)",
+        save_path=str(run_dir / "mnist_bp_random_detectors.png"),
+        cmap="RdBu_r",
     )
     
     # Save hyperparameters and results
@@ -426,6 +487,9 @@ def run_cifar10_experiment(
         )
         print(f"Weight evolution video saved to {video_path}")
     
+    # Save bio weights after Phase 1
+    save_weights(run_dir, bio_net.bio_layer.weight.data, "bio_phase1")
+    
     # Visualize bio weights
     bio_weights = bio_net.bio_layer.weight.data.cpu().numpy()
     draw_weights_color(
@@ -455,6 +519,10 @@ def run_cifar10_experiment(
         device=device,
     )
     
+    # Save bio weights after Phase 2
+    save_weights(run_dir, bio_net.bio_layer.weight.data, "bio_phase2")
+    save_weights(run_dir, bio_net.readout.weight.data, "bio_readout")
+    
     bio_final_error = bio_history["test_error"][-1]
     print(f"\nBio-Inspired Final Test Error: {bio_final_error:.2f}%")
     
@@ -480,6 +548,10 @@ def run_cifar10_experiment(
     bp_final_error = bp_history["test_error"][-1]
     print(f"\nBackprop Final Test Error: {bp_final_error:.2f}%")
     
+    # Save backprop weights
+    save_weights(run_dir, bp_net.hidden.weight.data, "backprop_hidden")
+    save_weights(run_dir, bp_net.readout.weight.data, "backprop_readout")
+    
     # Visualize backprop weights (color version for CIFAR-10)
     bp_weights = bp_net.hidden.weight.data.cpu().numpy()
     draw_weights_color(
@@ -497,6 +569,31 @@ def run_cifar10_experiment(
         bp_history,
         title="CIFAR-10: Accuracy vs Epoch",
         save_path=str(run_dir / "cifar10_learning_curves.png"),
+    )
+    
+    # Plot error rates (paper-style)
+    plot_error_rates(
+        bio_history,
+        bp_history,
+        title="CIFAR-10: Error Rate on Training and Test Sets",
+        save_path=str(run_dir / "cifar10_error_rates.png"),
+    )
+    
+    # Draw random feature detectors (paper-style: "Twenty randomly chosen feature detectors")
+    draw_random_feature_detectors_color(
+        bio_weights,
+        img_shape=(3, 32, 32),
+        n_detectors=20,
+        title="Bio-Inspired: Twenty Randomly Chosen Feature Detectors (of 2,000)",
+        save_path=str(run_dir / "cifar10_bio_random_detectors.png"),
+    )
+    
+    draw_random_feature_detectors_color(
+        bp_weights,
+        img_shape=(3, 32, 32),
+        n_detectors=20,
+        title="Backprop: Twenty Randomly Chosen Feature Detectors (of 2,000)",
+        save_path=str(run_dir / "cifar10_bp_random_detectors.png"),
     )
     
     # Save hyperparameters and results

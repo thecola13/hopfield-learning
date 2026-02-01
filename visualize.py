@@ -465,3 +465,244 @@ def save_weight_evolution_frames(
         plt.close('all')  # Clean up figures
     
     return saved_paths
+
+
+def draw_random_feature_detectors(
+    weights: np.ndarray,
+    img_shape: tuple,
+    n_detectors: int = 20,
+    title: str = "Randomly Chosen Feature Detectors",
+    save_path: str = None,
+    cmap: str = "RdBu_r",
+    seed: int = 42,
+) -> plt.Figure:
+    """
+    Visualize randomly chosen feature detectors (weights) as in the paper.
+    
+    This reproduces the paper's visualization showing "Twenty randomly chosen 
+    feature detectors of 2,000 are shown".
+    
+    Args:
+        weights: Weight matrix of shape (n_hidden, input_dim)
+        img_shape: Original image shape, e.g., (28, 28) for MNIST
+        n_detectors: Number of random detectors to show (default: 20)
+        title: Plot title
+        save_path: Path to save the figure (optional)
+        cmap: Colormap to use
+        seed: Random seed for reproducibility
+        
+    Returns:
+        matplotlib Figure object
+    """
+    # Set random seed for reproducibility
+    np.random.seed(seed)
+    
+    # Randomly select feature detectors
+    n_total = weights.shape[0]
+    selected_indices = np.random.choice(n_total, size=min(n_detectors, n_total), replace=False)
+    selected_weights = weights[selected_indices]
+    
+    # Determine grid layout (try to make it roughly square)
+    n_show = len(selected_indices)
+    n_cols = min(5, n_show)  # Max 5 columns
+    n_rows = (n_show + n_cols - 1) // n_cols
+    
+    # Reshape weights to images
+    weight_imgs = selected_weights.reshape(n_show, *img_shape)
+    
+    # Global normalization (key for consistent scale)
+    all_weights = weight_imgs.reshape(-1, img_shape[0]*img_shape[1])
+    vmax = np.max(np.abs(all_weights))
+    vmin = -vmax  # Symmetric for weights
+    
+    # Create figure with space for colorbar
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 1.5 + 1.5, n_rows * 1.5))
+    fig.suptitle(title, fontsize=14, fontweight='bold')
+    
+    # Flatten axes
+    if n_rows == 1 and n_cols == 1:
+        axes_flat = [axes]
+    elif n_rows == 1 or n_cols == 1:
+        axes_flat = axes.flat
+    else:
+        axes_flat = axes.flat
+    
+    images = []  # Collect mappables for colorbar
+    
+    for idx in range(n_rows * n_cols):
+        ax = axes_flat[idx]
+        ax.axis("off")
+        
+        if idx < n_show:
+            img = ax.imshow(
+                weight_imgs[idx], cmap=cmap, vmin=vmin, vmax=vmax
+            )
+            # Add detector index as title
+            ax.set_title(f"#{selected_indices[idx]}", fontsize=9)
+            images.append(img)
+    
+    plt.tight_layout(rect=[0, 0, 0.9, 0.96])  # Leave space for colorbar and title
+    
+    # Add single colorbar on right
+    if images:
+        cbar = fig.colorbar(images[0], ax=axes, shrink=0.8, pad=0.02, aspect=20)
+        cbar.set_label("Weight Value", rotation=270, labelpad=20)
+    
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved random feature detectors to {save_path}")
+    
+    return fig
+
+
+def draw_random_feature_detectors_color(
+    weights: np.ndarray,
+    img_shape: tuple = (3, 32, 32),
+    n_detectors: int = 20,
+    title: str = "Randomly Chosen Feature Detectors",
+    save_path: str = None,
+    seed: int = 42,
+) -> plt.Figure:
+    """
+    Visualize randomly chosen color feature detectors as in the paper.
+    
+    For CIFAR-10: weights should reshape to (C, H, W) = (3, 32, 32)
+    
+    Args:
+        weights: Weight matrix of shape (n_hidden, input_dim)
+        img_shape: Shape as (C, H, W), e.g., (3, 32, 32) for CIFAR-10
+        n_detectors: Number of random detectors to show (default: 20)
+        title: Plot title
+        save_path: Path to save the figure (optional)
+        seed: Random seed for reproducibility
+        
+    Returns:
+        matplotlib Figure object
+    """
+    # Set random seed for reproducibility
+    np.random.seed(seed)
+    
+    # Randomly select feature detectors
+    n_total = weights.shape[0]
+    selected_indices = np.random.choice(n_total, size=min(n_detectors, n_total), replace=False)
+    selected_weights = weights[selected_indices]
+    
+    # Determine grid layout
+    n_show = len(selected_indices)
+    n_cols = min(5, n_show)
+    n_rows = (n_show + n_cols - 1) // n_cols
+    
+    C, H, W = img_shape
+    
+    # Reshape weights to images (C, H, W) -> (H, W, C)
+    weight_imgs = selected_weights.reshape(n_show, C, H, W)
+    weight_imgs = np.transpose(weight_imgs, (0, 2, 3, 1))  # (n, H, W, C)
+    
+    # Normalize to [0, 1] for display
+    weight_imgs = (weight_imgs - weight_imgs.min()) / (weight_imgs.max() - weight_imgs.min() + 1e-8)
+    
+    # Create figure
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(n_cols * 1.5, n_rows * 1.5))
+    fig.suptitle(title, fontsize=14, fontweight='bold')
+    
+    if n_rows == 1 and n_cols == 1:
+        axes_flat = [axes]
+    elif n_rows == 1 or n_cols == 1:
+        axes_flat = axes.flat
+    else:
+        axes_flat = axes.flat
+    
+    for idx in range(n_rows * n_cols):
+        ax = axes_flat[idx]
+        ax.axis("off")
+        
+        if idx < n_show:
+            ax.imshow(weight_imgs[idx])
+            ax.set_title(f"#{selected_indices[idx]}", fontsize=9)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved random feature detectors to {save_path}")
+    
+    return fig
+
+
+def plot_error_rates(
+    bio_history: dict,
+    bp_history: dict,
+    title: str = "Error Rate on Training and Test Sets",
+    save_path: str = None,
+) -> plt.Figure:
+    """
+    Plot error rates (not accuracy) for bio and backprop methods.
+    
+    This reproduces the paper's visualization: "Error rate on the training and 
+    test sets as training progresses for the proposed biological algorithm and 
+    for the standard network trained end-to-end."
+    
+    Args:
+        bio_history: Dict with 'train_error' and 'test_error' lists from bio training
+        bp_history: Dict with 'train_error' and 'test_error' lists from backprop training
+        title: Plot title
+        save_path: Path to save the figure (optional)
+        
+    Returns:
+        matplotlib Figure object
+    """
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Get error rates (already in percentage)
+    bio_train_error = bio_history.get("train_error", [])
+    bio_test_error = bio_history["test_error"]
+    bp_train_error = bp_history.get("train_error", [])
+    bp_test_error = bp_history["test_error"]
+    
+    epochs_bio = range(1, len(bio_test_error) + 1)
+    epochs_bp = range(1, len(bp_test_error) + 1)
+    
+    # Plot bio curves (solid lines)
+    if bio_train_error:
+        ax.plot(epochs_bio, bio_train_error, label="Bio Train", 
+                linewidth=2.5, color="#1f77b4", linestyle="-")
+    ax.plot(epochs_bio, bio_test_error, label="Bio Test", 
+            linewidth=2.5, color="#ff7f0e", linestyle="-")
+    
+    # Plot backprop curves (dashed lines)
+    if bp_train_error:
+        ax.plot(epochs_bp, bp_train_error, label="Backprop Train", 
+                linewidth=2.5, color="#2ca02c", linestyle="--")
+    ax.plot(epochs_bp, bp_test_error, label="Backprop Test", 
+            linewidth=2.5, color="#d62728", linestyle="--")
+    
+    ax.set_xlabel("Epoch", fontsize=13, fontweight='bold')
+    ax.set_ylabel("Error Rate (%)", fontsize=13, fontweight='bold')
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.legend(fontsize=11, loc='upper right', framealpha=0.9)
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    # Set y-axis to show error rate (typically 0-10% for MNIST)
+    all_errors = bio_test_error + bp_test_error
+    if bio_train_error:
+        all_errors.extend(bio_train_error)
+    if bp_train_error:
+        all_errors.extend(bp_train_error)
+    
+    max_error = max(all_errors)
+    min_error = min(all_errors)
+    
+    # Set reasonable y-axis limits
+    y_margin = (max_error - min_error) * 0.1
+    ax.set_ylim(bottom=max(0, min_error - y_margin), top=max_error + y_margin)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        print(f"Saved error rate plot to {save_path}")
+    
+    return fig

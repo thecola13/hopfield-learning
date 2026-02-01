@@ -220,7 +220,7 @@ class BioNetwork(nn.Module):
     def train_unsupervised(
         self,
         dataloader_or_dataset,
-        epochs: int = 1000,
+        epochs: int = 300,
         lr_start: float = 0.04,
         lr_end: float = 0.0,
         device: str = "cpu",
