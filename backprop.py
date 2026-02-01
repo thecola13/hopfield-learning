@@ -73,7 +73,7 @@ class BackpropNetwork(nn.Module):
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
         criterion = nn.CrossEntropyLoss()
         
-        history = {"train_loss": [], "test_error": []}
+        history = {"train_loss": [], "train_error": [], "test_error": []}
         
         pbar = tqdm(range(epochs), desc="Backprop training")
         for epoch in pbar:
@@ -95,7 +95,9 @@ class BackpropNetwork(nn.Module):
             avg_loss = total_loss / len(train_loader)
             history["train_loss"].append(avg_loss)
             
-            # Evaluation
+            # Evaluation on train and test
+            train_error = self.evaluate(train_loader, device)
+            history["train_error"].append(train_error)
             test_error = self.evaluate(test_loader, device)
             history["test_error"].append(test_error)
             

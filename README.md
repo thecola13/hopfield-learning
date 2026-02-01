@@ -1,290 +1,141 @@
-# Hopfield Learning: Bio-Inspired Unsupervised Learning
+# Hopfield Learning
 
-Implementation of **Krotov & Hopfield (2019)** - "Unsupervised learning by competing hidden units"
+PyTorch implementation of biologically-inspired unsupervised learning from [Krotov & Hopfield (2019) "Unsupervised learning by competing hidden units"](https://www.pnas.org/doi/10.1073/pnas.1820458116).
 
-This project reproduces the key experiments from the paper, demonstrating that biologically-plausible local learning rules can match the performance of backpropagation on MNIST and CIFAR-10 classification tasks.
+## Overview
 
-## 📋 Overview
+This project reproduces the key experiments from the paper, comparing bio-inspired learning with traditional backpropagation on MNIST and CIFAR-10 datasets.
 
-The implementation includes:
-- **Bio-inspired learning layer** with anti-Hebbian competition (Figure 3)
-- **MNIST experiments** showing "ghost digit" receptive fields
-- **CIFAR-10 experiments** with color image features
-- **Backpropagation baseline** for comparison
-- **Visualization tools** for weights and learning curves
+### Key Features
 
-## 🚀 Quick Start
+- **Bio-Inspired Learning**: Implements the unsupervised Hebbian-like learning rule with anti-Hebbian competition
+- **Backprop Baseline**: Standard end-to-end backpropagation for comparison
+- **Weight Evolution Videos**: Optional recording of weight evolution during unsupervised training
+- **Learning Curve Visualization**: Train and test accuracy plots with distinct colors
 
-### Prerequisites
+## Installation
 
-- Python 3.13+
-- [uv](https://docs.astral.sh/uv/) package manager
-
-### Installation
-
-1. **Install uv** (if not already installed):
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-2. **Clone and setup**:
-```bash
-cd hopfield-learning
+# Using uv (recommended)
 uv sync
+
+# Or using pip
+pip install -e .
 ```
 
-This will automatically:
-- Create a virtual environment
-- Install all dependencies from `pyproject.toml`
-- Lock versions in `uv.lock`
+## Usage
 
-## 🔬 Reproducing Results
-
-### Run All Experiments
-
-To reproduce both MNIST and CIFAR-10 experiments:
+### Running Experiments
 
 ```bash
+# Run both MNIST and CIFAR-10 experiments
 uv run python reproduce_results.py
-```
 
-### Run Specific Experiments
-
-**MNIST only** (Figure 3):
-```bash
+# Run only MNIST experiment
 uv run python reproduce_results.py --mnist
-```
 
-**CIFAR-10 only** (Figure 7):
-```bash
+# Run only CIFAR-10 experiment
 uv run python reproduce_results.py --cifar10
-```
 
-### GPU Acceleration
-
-Use GPU if available (CUDA or Apple Silicon):
-
-```bash
-# NVIDIA GPU
+# Use GPU (CUDA or MPS on Apple Silicon)
 uv run python reproduce_results.py --device cuda
-
-# Apple Silicon (M1/M2/M3)
 uv run python reproduce_results.py --device mps
 ```
 
-### Custom Output Directory
+### Recording Weight Evolution
+
+Capture the unsupervised learning process as a video:
 
 ```bash
-uv run python reproduce_results.py --figures-dir my_results
+# Record weight evolution during training
+uv run python reproduce_results.py --mnist --record-evolution
+
+# Custom snapshot interval (default: 10 epochs)
+uv run python reproduce_results.py --cifar10 --record-evolution --snapshot-interval 20
 ```
 
-## 📊 Understanding the Results
+### Command Line Arguments
 
-### Output Structure
+| Argument | Description |
+|----------|-------------|
+| `--mnist` | Run MNIST experiment (Figure 3 from paper) |
+| `--cifar10` | Run CIFAR-10 experiment (Figure 7 from paper) |
+| `--record-evolution` | Record weight evolution video during unsupervised training |
+| `--device {cpu,cuda,mps}` | Device to use for training (default: cpu) |
+| `--figures-dir DIR` | Directory to save figures (default: figures) |
+| `--snapshot-interval N` | Epochs between weight snapshots (default: 10) |
 
-Each experiment run creates a timestamped directory in `figures/`:
-
-```
-figures/
-├── mnist_2026-01-31_21-30-00/
-│   ├── mnist_bio_weights.png          # Bio-inspired receptive fields
-│   ├── mnist_bp_weights.png           # Backprop weights (noise)
-│   ├── mnist_learning_curves.png      # Test error vs epoch
-│   ├── hyperparams.log                # Human-readable config
-│   └── hyperparams.json               # Machine-readable config
-└── cifar10_2026-01-31_22-15-00/
-    ├── cifar10_bio_weights.png
-    ├── hyperparams.log
-    └── hyperparams.json
-```
-
-### Expected Results
-
-**MNIST (Figure 3)**:
-- **Bio-inspired error**: ~1.46%
-- **Backprop error**: ~1.50%
-- **Bio weights**: Should show clear "ghost digits" with negative halos
-- **Backprop weights**: Should look like random noise
-
-**CIFAR-10 (Figure 7)**:
-- **Bio-inspired error**: ~45-50%
-- **Bio weights**: Should show color edge detectors and Gabor-like filters
-
-### Hyperparameters
-
-All hyperparameters are logged in each run directory. Key parameters:
-
-**MNIST**:
-- Hidden units: 2000
-- p=3, k=7, δ=0.4
-- ReLU^4.5 activation
-- Phase 1: 1000 epochs unsupervised (LR: 0.04→0)
-- Phase 2: 300 epochs supervised (LR schedule)
-
-**CIFAR-10**:
-- Hidden units: 2000
-- p=2, k=2, δ=0.0
-- ReLU^10 activation
-- Same training schedule as MNIST
-
-## 🎨 Visualization Tools
-
-### Standalone Visualization
-
-You can use `visualize.py` to create custom visualizations:
-
-```python
-from visualize import draw_weights, draw_weights_color, plot_learning_curves
-import numpy as np
-
-# Visualize grayscale weights (MNIST)
-weights = np.random.randn(200, 784)  # Your weight matrix
-draw_weights(
-    weights,
-    img_shape=(28, 28),
-    n_cols=20,
-    n_rows=10,
-    title="My Weights",
-    save_path="my_weights.png"
-)
-
-# Visualize color weights (CIFAR-10)
-weights_color = np.random.randn(200, 3072)
-draw_weights_color(
-    weights_color,
-    img_shape=(3, 32, 32),
-    n_cols=20,
-    n_rows=10,
-    save_path="my_color_weights.png"
-)
-
-# Plot learning curves
-bio_history = {"test_error": [5.0, 3.0, 2.0, 1.5]}
-bp_history = {"test_error": [5.5, 3.5, 2.5, 1.8]}
-plot_learning_curves(
-    bio_history,
-    bp_history,
-    title="My Learning Curves",
-    save_path="my_curves.png"
-)
-```
-
-## 🛠️ Using uv
-
-### Common uv Commands
-
-```bash
-# Install/sync dependencies
-uv sync
-
-# Add a new dependency
-uv add scipy
-
-# Add a development dependency
-uv add --dev pytest
-
-# Run a Python script
-uv run python reproduce_results.py
-
-# Run a Python command
-uv run python -c "import torch; print(torch.__version__)"
-
-# Activate the virtual environment manually
-source .venv/bin/activate  # Unix/macOS
-# or
-.venv\Scripts\activate  # Windows
-
-# Update dependencies
-uv lock --upgrade
-```
-
-### Why uv?
-
-- **Fast**: 10-100x faster than pip
-- **Reliable**: Deterministic dependency resolution
-- **Simple**: No need to manually manage virtual environments
-- **Compatible**: Works with standard `pyproject.toml`
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 hopfield-learning/
-├── README.md                    # This file
-├── pyproject.toml              # Project dependencies
-├── uv.lock                     # Locked dependency versions
-├── reproduce_results.py        # Main experiment script
-├── bio_linear.py               # Bio-inspired learning layer
-├── backprop.py                 # Backprop baseline network
-├── data_utils.py               # Dataset loaders
-├── visualize.py                # Visualization utilities
-├── paper.pdf                   # Original paper
-├── data/                       # Downloaded datasets (auto-created)
-└── figures/                    # Experiment results (auto-created)
+├── reproduce_results.py   # Main experiment runner
+├── bio_linear.py          # Bio-inspired network implementation
+├── backprop.py            # Backprop baseline implementation
+├── data_utils.py          # Dataset loading utilities
+├── visualize.py           # Visualization functions
+├── pyproject.toml         # Project dependencies
+├── data/                  # Downloaded datasets (MNIST, CIFAR-10)
+├── figures/               # Output figures and videos
+└── slides/                # Manim presentation slides
 ```
 
-## 🔍 Key Implementation Details
+## Output
 
-### Bio-Inspired Learning Rule
+Each experiment run creates a timestamped directory in `figures/` containing:
 
-The core learning rule implements:
+- `*_bio_weights.png` - Visualized bio-inspired weights (ghost digits/features)
+- `*_bp_weights.png` - Visualized backprop weights (random noise)
+- `*_learning_curves.png` - Train/test accuracy comparison
+- `hyperparams.json` - Saved hyperparameters and results
+- `weight_evolution.gif` - Weight evolution video (if `--record-evolution` used)
+- `evolution_frames/` - Individual snapshot frames (if `--record-evolution` used)
 
-```
-Δw_i = η * x * (h_i^p - δ * Σ_j h_j^k)
-```
+### Learning Curve Colors
 
-where:
-- `h_i = max(0, w_i · x)` - ReLU activation
-- `p` - Hebbian exponent (typically 2-3)
-- `k` - anti-Hebbian exponent (typically 2-7)
-- `δ` - anti-Hebbian strength (0.0-0.4)
+| Method | Train | Test |
+|--------|-------|------|
+| Backprop (BP) | Pink | Green |
+| Bio-Inspired | Blue | Orange |
 
-This creates **competition** between hidden units, leading to sparse, interpretable features.
+## Architecture
 
-### Two-Phase Training
+Both networks use a two-layer architecture:
+- **Hidden layer**: 2000 neurons
+- **Output layer**: 10 classes (softmax)
 
-1. **Phase 1 (Unsupervised)**: Train bio-layer with local learning rule
-2. **Phase 2 (Supervised)**: Freeze bio-layer, train readout with backprop
+### Bio-Inspired Network
 
-This mimics biological learning where early sensory layers develop without supervision.
+1. **Phase 1 (Unsupervised)**: Train hidden layer with competing hidden units
+   - MNIST: p=3, k=7, δ=0.4, 1000 epochs
+   - CIFAR-10: p=2, k=2, δ=0.0, 1000 epochs
+   
+2. **Phase 2 (Supervised)**: Train readout layer only
+   - ReLU^n activation (n=4.5 for MNIST, n=10 for CIFAR-10)
+   - Adam optimizer with learning rate schedule
 
-## 📚 References
+### Backprop Network
 
-**Original Paper**:
-```
-Krotov, D., & Hopfield, J. J. (2019).
-Unsupervised learning by competing hidden units.
-Proceedings of the National Academy of Sciences, 116(16), 7723-7731.
-```
+- End-to-end supervised training with standard backpropagation
+- ReLU activation, Adam optimizer
 
-**Related Work**:
-- Hopfield Networks (1982)
-- Oja's Rule (1982)
-- Sparse Coding (Olshausen & Field, 1996)
+## Results
 
-## 🐛 Troubleshooting
+Expected test error rates:
+- **MNIST**: ~1.5% for both methods
+- **CIFAR-10**: Varies based on hyperparameters
 
-### CUDA Out of Memory
-```bash
-# Reduce batch size or use CPU
-uv run python reproduce_results.py --device cpu
-```
+## Dependencies
 
-### MPS (Apple Silicon) Issues
-```bash
-# Fall back to CPU if MPS has issues
-uv run python reproduce_results.py --device cpu
-```
+- Python ≥3.13
+- PyTorch ≥2.0
+- torchvision ≥0.15
+- numpy ≥1.24
+- matplotlib ≥3.7
+- tqdm ≥4.65
+- imageio ≥2.37 (for weight evolution videos)
+- manim ≥0.19 (for presentation slides)
 
-### Slow Training
-- Use GPU acceleration (`--device cuda` or `--device mps`)
-- Reduce number of epochs for testing
-- MNIST takes ~30-60 minutes on CPU, ~5-10 minutes on GPU
-- CIFAR-10 takes ~60-120 minutes on CPU, ~10-20 minutes on GPU
+## References
 
-## 📝 License
-
-This is an educational implementation for academic purposes.
-
-## 🤝 Contributing
-
-This is a course project. For questions or issues, please contact the author.
+Krotov, D., & Hopfield, J. J. (2019). Unsupervised learning by competing hidden units. *Proceedings of the National Academy of Sciences*, 116(16), 7723-7731.

@@ -19,7 +19,10 @@ import torch
 from bio_linear import BioNetwork
 from backprop import BackpropNetwork
 from data_utils import get_mnist_loaders, get_cifar10_loaders
-from visualize import draw_weights, draw_weights_color, plot_learning_curves
+from visualize import (
+    draw_weights, draw_weights_color, plot_learning_curves,
+    create_weight_evolution_video, save_weight_evolution_frames,
+)
 
 
 def create_run_dir(base_dir: str, experiment_name: str) -> Path:
@@ -58,7 +61,12 @@ def save_hyperparams(run_dir: Path, hyperparams: dict, results: dict = None):
     print(f"Saved hyperparams to: {log_path}")
 
 
-def run_mnist_experiment(device: str = "cpu", figures_dir: str = "figures"):
+def run_mnist_experiment(
+    device: str = "cpu",
+    figures_dir: str = "figures",
+    record_evolution: bool = False,
+    snapshot_interval: int = 10,
+):
     """
     Reproduce Figure 3: MNIST weights and accuracy comparison.
     
@@ -71,6 +79,12 @@ def run_mnist_experiment(device: str = "cpu", figures_dir: str = "figures"):
     - Adam, LR schedule: 0.001 for 100 epochs, halve every 50
     
     Baseline: End-to-end backprop with same architecture
+    
+    Args:
+        device: Device to use for training
+        figures_dir: Directory to save figures
+        record_evolution: If True, capture weight snapshots during unsupervised training
+        snapshot_interval: Epochs between weight snapshots (when record_evolution=True)
     """
     print("\n" + "="*60)
     print("MNIST EXPERIMENT (Figure 3)")
@@ -114,6 +128,8 @@ def run_mnist_experiment(device: str = "cpu", figures_dir: str = "figures"):
         "phase1_lr_end": PHASE1_LR_END,
         "phase2_epochs": PHASE2_EPOCHS,
         "batch_size": BATCH_SIZE,
+        "record_evolution": record_evolution,
+        "snapshot_interval": snapshot_interval if record_evolution else None,
     }
     
     # Load data
@@ -133,17 +149,52 @@ def run_mnist_experiment(device: str = "cpu", figures_dir: str = "figures"):
         k=K,
         delta=DELTA,
         n=N,
+        # Parity with NumPy reference (old.py):
+        dtype='float64',       # NumPy defaults to float64
+        normalize_init=False,  # old.py uses randn/sqrt(in_dim) without row normalization
+        device=device,
     )
     
     # Phase 1: Unsupervised learning
     print("\nPhase 1: Unsupervised training...")
-    bio_net.train_unsupervised(
+    weight_snapshots = bio_net.train_unsupervised(
         train_loader,
         epochs=PHASE1_EPOCHS,
         lr_start=PHASE1_LR_START,
         lr_end=PHASE1_LR_END,
         device=device,
+        shuffle=True,  # Reshuffle every epoch for parity with old.py
+        record_evolution=record_evolution,
+        snapshot_interval=snapshot_interval,
     )
+    
+    # Create weight evolution video if snapshots were recorded
+    if record_evolution and weight_snapshots:
+        print(f"\nCreating weight evolution video with {len(weight_snapshots)} frames...")
+        
+        # Save individual frames
+        frames_dir = run_dir / "evolution_frames"
+        save_weight_evolution_frames(
+            weight_snapshots,
+            img_shape=(28, 28),
+            save_dir=str(frames_dir),
+            n_cols=20,
+            n_rows=10,
+            cmap="RdBu_r",
+        )
+        
+        # Create video/gif
+        video_path = str(run_dir / "weight_evolution.gif")
+        create_weight_evolution_video(
+            weight_snapshots,
+            img_shape=(28, 28),
+            save_path=video_path,
+            n_cols=20,
+            n_rows=10,
+            fps=3,
+            cmap="RdBu_r",
+        )
+        print(f"Weight evolution video saved to {video_path}")
     
     # Visualize bio weights (should show ghost digits)
     bio_weights = bio_net.bio_layer.weight.data.cpu().numpy()
@@ -154,6 +205,7 @@ def run_mnist_experiment(device: str = "cpu", figures_dir: str = "figures"):
         n_rows=10,
         title="Bio-Inspired Weights (MNIST) - Ghost Digits Expected",
         save_path=str(run_dir / "mnist_bio_weights.png"),
+        cmap="RdBu_r"
     )
     
     # Phase 2: Supervised learning
@@ -208,13 +260,14 @@ def run_mnist_experiment(device: str = "cpu", figures_dir: str = "figures"):
         n_rows=10,
         title="Backprop Weights (MNIST) - Random Noise Expected",
         save_path=str(run_dir / "mnist_bp_weights.png"),
+        cmap="RdBu_r"
     )
     
     # Plot learning curves
     plot_learning_curves(
         bio_history,
         bp_history,
-        title="MNIST: Test Error vs Epoch",
+        title="MNIST: Accuracy vs Epoch",
         save_path=str(run_dir / "mnist_learning_curves.png"),
     )
     
@@ -238,7 +291,12 @@ def run_mnist_experiment(device: str = "cpu", figures_dir: str = "figures"):
     return bio_history, bp_history
 
 
-def run_cifar10_experiment(device: str = "cpu", figures_dir: str = "figures"):
+def run_cifar10_experiment(
+    device: str = "cpu",
+    figures_dir: str = "figures",
+    record_evolution: bool = False,
+    snapshot_interval: int = 10,
+):
     """
     Reproduce Figure 7: CIFAR-10 results.
     
@@ -247,6 +305,14 @@ def run_cifar10_experiment(device: str = "cpu", figures_dir: str = "figures"):
     
     Phase 2: Supervised training of readout layer
     - ReLU^10 activation
+    
+    Baseline: End-to-end backprop with same architecture
+    
+    Args:
+        device: Device to use for training
+        figures_dir: Directory to save figures
+        record_evolution: If True, capture weight snapshots during unsupervised training
+        snapshot_interval: Epochs between weight snapshots (when record_evolution=True)
     """
     print("\n" + "="*60)
     print("CIFAR-10 EXPERIMENT (Figure 7)")
@@ -269,10 +335,10 @@ def run_cifar10_experiment(device: str = "cpu", figures_dir: str = "figures"):
     
     # Training params
     PHASE1_EPOCHS = 1000
-    PHASE1_LR_START = 0.04
+    PHASE1_LR_START = 0.02
     PHASE1_LR_END = 0.0
     PHASE2_EPOCHS = 300
-    BATCH_SIZE = 100
+    BATCH_SIZE = 1000
     
     # Collect hyperparameters for logging
     hyperparams = {
@@ -290,13 +356,17 @@ def run_cifar10_experiment(device: str = "cpu", figures_dir: str = "figures"):
         "phase1_lr_end": PHASE1_LR_END,
         "phase2_epochs": PHASE2_EPOCHS,
         "batch_size": BATCH_SIZE,
+        "record_evolution": record_evolution,
+        "snapshot_interval": snapshot_interval if record_evolution else None,
     }
     
     # Load data
     print("\nLoading CIFAR-10 dataset...")
     train_loader, test_loader = get_cifar10_loaders(batch_size=BATCH_SIZE)
     
+    # =========================================================
     # Bio-Inspired Network
+    # =========================================================
     print("\n--- Bio-Inspired Network ---")
     
     bio_net = BioNetwork(
@@ -307,17 +377,54 @@ def run_cifar10_experiment(device: str = "cpu", figures_dir: str = "figures"):
         k=K,
         delta=DELTA,
         n=N,
+        # Parity with NumPy reference (old.py):
+        dtype='float64',       # NumPy defaults to float64
+        normalize_init=False,  # old.py uses randn/sqrt(in_dim) without row normalization
+        device=device,
     )
     
     # Phase 1: Unsupervised learning
     print("\nPhase 1: Unsupervised training...")
-    bio_net.train_unsupervised(
+    weight_snapshots = bio_net.train_unsupervised(
         train_loader,
         epochs=PHASE1_EPOCHS,
         lr_start=PHASE1_LR_START,
         lr_end=PHASE1_LR_END,
         device=device,
+        shuffle=True,  # Reshuffle every epoch for parity with old.py
+        record_evolution=record_evolution,
+        snapshot_interval=snapshot_interval,
     )
+    
+    # Create weight evolution video if snapshots were recorded
+    if record_evolution and weight_snapshots:
+        print(f"\nCreating weight evolution video with {len(weight_snapshots)} frames...")
+        
+        # Save individual frames
+        frames_dir = run_dir / "evolution_frames"
+        save_weight_evolution_frames(
+            weight_snapshots,
+            img_shape=(3, 32, 32),
+            save_dir=str(frames_dir),
+            n_cols=20,
+            n_rows=10,
+            cmap="RdBu_r",
+            color=True,
+        )
+        
+        # Create video/gif
+        video_path = str(run_dir / "weight_evolution.gif")
+        create_weight_evolution_video(
+            weight_snapshots,
+            img_shape=(3, 32, 32),
+            save_path=video_path,
+            n_cols=20,
+            n_rows=10,
+            fps=3,
+            cmap="RdBu_r",
+            color=True,
+        )
+        print(f"Weight evolution video saved to {video_path}")
     
     # Visualize bio weights
     bio_weights = bio_net.bio_layer.weight.data.cpu().numpy()
@@ -349,11 +456,55 @@ def run_cifar10_experiment(device: str = "cpu", figures_dir: str = "figures"):
     )
     
     bio_final_error = bio_history["test_error"][-1]
+    print(f"\nBio-Inspired Final Test Error: {bio_final_error:.2f}%")
+    
+    # =========================================================
+    # Backprop Baseline
+    # =========================================================
+    print("\n--- Backprop Baseline ---")
+    
+    bp_net = BackpropNetwork(
+        in_features=INPUT_DIM,
+        hidden_features=HIDDEN_DIM,
+        num_classes=NUM_CLASSES,
+    )
+    
+    bp_history = bp_net.train_supervised(
+        train_loader,
+        test_loader,
+        epochs=PHASE2_EPOCHS,
+        lr=0.001,
+        device=device,
+    )
+    
+    bp_final_error = bp_history["test_error"][-1]
+    print(f"\nBackprop Final Test Error: {bp_final_error:.2f}%")
+    
+    # Visualize backprop weights (color version for CIFAR-10)
+    bp_weights = bp_net.hidden.weight.data.cpu().numpy()
+    draw_weights_color(
+        bp_weights,
+        img_shape=(3, 32, 32),
+        n_cols=20,
+        n_rows=10,
+        title="Backprop Weights (CIFAR-10) - Random Noise Expected",
+        save_path=str(run_dir / "cifar10_bp_weights.png"),
+    )
+    
+    # Plot learning curves
+    plot_learning_curves(
+        bio_history,
+        bp_history,
+        title="CIFAR-10: Accuracy vs Epoch",
+        save_path=str(run_dir / "cifar10_learning_curves.png"),
+    )
     
     # Save hyperparameters and results
     results = {
         "bio_final_error": f"{bio_final_error:.2f}%",
+        "bp_final_error": f"{bp_final_error:.2f}%",
         "bio_min_error": f"{min(bio_history['test_error']):.2f}%",
+        "bp_min_error": f"{min(bp_history['test_error']):.2f}%",
     }
     save_hyperparams(run_dir, hyperparams, results)
     
@@ -362,9 +513,10 @@ def run_cifar10_experiment(device: str = "cpu", figures_dir: str = "figures"):
     print("CIFAR-10 RESULTS SUMMARY")
     print("="*60)
     print(f"Bio-Inspired Error: {bio_final_error:.2f}%")
+    print(f"Backprop Error:     {bp_final_error:.2f}%")
     print(f"\nFigures saved to: {run_dir}/")
     
-    return bio_history
+    return bio_history, bp_history
 
 
 def main():
@@ -382,6 +534,11 @@ def main():
         help="Run CIFAR-10 experiment (Figure 7)",
     )
     parser.add_argument(
+        "--record-evolution",
+        action="store_true",
+        help="Record weight evolution video during unsupervised training",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         default="cpu",
@@ -394,10 +551,16 @@ def main():
         default="figures",
         help="Directory to save figures",
     )
+    parser.add_argument(
+        "--snapshot-interval",
+        type=int,
+        default=10,
+        help="Epochs between weight snapshots (for --record-evolution)",
+    )
     
     args = parser.parse_args()
     
-    # Default to running both if neither specified
+    # Default to running both mnist and cifar10 if nothing specified
     if not args.mnist and not args.cifar10:
         args.mnist = True
         args.cifar10 = True
@@ -418,10 +581,20 @@ def main():
     
     # Run experiments
     if args.mnist:
-        run_mnist_experiment(device=device, figures_dir=args.figures_dir)
+        run_mnist_experiment(
+            device=device,
+            figures_dir=args.figures_dir,
+            record_evolution=args.record_evolution,
+            snapshot_interval=args.snapshot_interval,
+        )
     
     if args.cifar10:
-        run_cifar10_experiment(device=device, figures_dir=args.figures_dir)
+        run_cifar10_experiment(
+            device=device,
+            figures_dir=args.figures_dir,
+            record_evolution=args.record_evolution,
+            snapshot_interval=args.snapshot_interval,
+        )
     
     print("\n" + "="*60)
     print("ALL EXPERIMENTS COMPLETE")
