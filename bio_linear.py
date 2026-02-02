@@ -18,6 +18,17 @@ import torch.nn as nn
 import numpy as np
 from torch.utils.data import DataLoader, RandomSampler
 
+import torch.nn.functional as F
+
+def paper_loss(c, y, m: int):
+    # y: (B,) class indices
+    # build one-hot in {0,1}
+    oh01 = F.one_hot(y, num_classes=c.size(1)).to(dtype=c.dtype)
+    # convert to {-1,+1}: correct class +1, others -1
+    t = oh01 * 2 - 1
+    # L_m, averaged over batch (paper sums; averaging is equivalent up to scaling LR)
+    return torch.mean(torch.sum(torch.abs(c - t) ** m, dim=1))
+
 
 class BioLinear(nn.Module):
     """
@@ -207,6 +218,8 @@ class BioNetwork(nn.Module):
         self.readout = nn.Linear(hidden_features, num_classes).to(dtype=torch_dtype, device=device)
         self.n = n
         self._dtype_str = self.bio_layer._dtype_str
+        self.beta = 1.0
+        self.m = 6
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through the network."""
@@ -215,7 +228,10 @@ class BioNetwork(nn.Module):
         # ReLU^n activation
         h = torch.relu(h) ** self.n
         # Readout layer
-        return self.readout(h)
+        logits = self.readout(h)
+        c = torch.tanh(self.beta * logits)
+
+        return c
     
     def train_unsupervised(
         self,
@@ -381,8 +397,8 @@ class BioNetwork(nn.Module):
                 target = target.to(device)
                 
                 optimizer.zero_grad()
-                output = self(data)
-                loss = criterion(output, target)
+                c = self(data)
+                loss = paper_loss(c, target, m = self.m)
                 loss.backward()
                 optimizer.step()
                 
