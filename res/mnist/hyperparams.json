@@ -1,0 +1,26 @@
+{
+  "hyperparams": {
+    "experiment": "MNIST",
+    "device": "mps",
+    "input_dim": 784,
+    "hidden_dim": 2000,
+    "num_classes": 10,
+    "p": 3.0,
+    "k": 7,
+    "delta": 0.4,
+    "n": 4.5,
+    "phase1_epochs": 1000,
+    "phase1_lr_start": 0.04,
+    "phase1_lr_end": 0.0,
+    "phase2_epochs": 300,
+    "batch_size": 100,
+    "record_evolution": false,
+    "snapshot_interval": null
+  },
+  "results": {
+    "bio_final_error": "5.12%",
+    "bp_final_error": "1.68%",
+    "bio_min_error": "5.12%",
+    "bp_min_error": "1.53%"
+  }
+}

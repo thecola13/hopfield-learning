@@ -1,0 +1,29 @@
+============================================================
+Run: cifar10_2026-02-01_22-20-49
+============================================================
+
+HYPERPARAMETERS
+----------------------------------------
+experiment: CIFAR-10
+device: mps
+input_dim: 3072
+hidden_dim: 2000
+num_classes: 10
+p: 2.0
+k: 2
+delta: 0.0
+n: 10.0
+phase1_epochs: 1000
+phase1_lr_start: 0.02
+phase1_lr_end: 0.0
+phase2_epochs: 300
+batch_size: 1000
+record_evolution: False
+snapshot_interval: None
+
+RESULTS
+----------------------------------------
+bio_final_error: 56.28%
+bp_final_error: 45.35%
+bio_min_error: 56.07%
+bp_min_error: 44.21%

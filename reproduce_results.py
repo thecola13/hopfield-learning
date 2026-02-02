@@ -120,7 +120,7 @@ def run_mnist_experiment(
     # Hyperparameters from Appendix B
     INPUT_DIM = 784
     HIDDEN_DIM = 2000
-    NUM_CLASSES = 1000
+    NUM_CLASSES = 10
     
     # Bio params
     P = 3.0
@@ -129,7 +129,7 @@ def run_mnist_experiment(
     N = 4.5  # ReLU^n exponent
     
     # Training params
-    PHASE1_EPOCHS = 10
+    PHASE1_EPOCHS = 1000
     PHASE1_LR_START = 0.04
     PHASE1_LR_END = 0.0
     PHASE2_EPOCHS = 300
